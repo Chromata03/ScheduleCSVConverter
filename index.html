@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Shift CSV → ICS Calendar</title>
+  <style>
+    :root { 
+      --bg:#f7f9fc; --fg:#1c1e21; --muted:#606770; --card:#ffffff; 
+      --accent:#4f8ef7; --accent-hover:#3d75d8;
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font:16px/1.5 "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--fg); }
+    header { padding:24px; border-bottom:1px solid #ddd; background:#fff; position:sticky; top:0; z-index:10;}
+    h1 { margin:0 0 8px; font-size:22px; font-weight:600; }
+    p.sub { margin:0; color:var(--muted); }
+    main { padding:24px; max-width:1200px; margin:0 auto; display:grid; gap:20px; }
+    .grid { display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .card { background:var(--card); border:1px solid #e5e7eb; border-radius:16px; padding:20px; box-shadow:0 4px 10px rgba(0,0,0,0.05); }
+    label { font-weight:600; font-size:14px; display:block; margin-bottom:6px; }
+    input[type="text"], input[type="number"], select { width:100%; padding:10px 12px; border-radius:12px; border:1px solid #ccd0d5; background:#fff; color:var(--fg); font-size:14px; }
+    input[type="file"] { width:100%; }
+    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:16px; }
+    .muted { color:var(--muted); font-size:13px; }
+    button { cursor:pointer; padding:10px 16px; border-radius:12px; font-weight:600; font-size:14px; transition:0.2s; }
+    button.primary { background:var(--accent); color:#fff; border:1px solid transparent; }
+    button.primary:hover { background:var(--accent-hover); }
+    button:disabled { opacity:0.6; cursor:not-allowed; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th, td { text-align:left; border-bottom:1px solid #eee; padding:8px 10px; }
+    select.location-cell { padding:4px 6px; border-radius:6px; border:1px solid #ccc; font-size:13px; }
+    .pill { display:inline-block; padding:3px 10px; border-radius:999px; background:#eef2ff; color:#3740a0; font-size:12px; }
+    footer { padding:16px 24px; color:var(--muted); border-top:1px solid #ddd; text-align:center; font-size:13px; }
+    .tooltip-wrapper { position: relative; display: inline-block; }
+    .tooltip-text { position: absolute; top: -28px; right: 0; background: #333; color: #fff; font-size: 12px; padding: 4px 8px; border-radius: 4px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.2s ease-in-out; }
+    .tooltip-wrapper input:focus + .tooltip-text { opacity: 1; }
+    #analyticsTable th, #analyticsTable td { border-bottom: 1px solid #eee; padding: 8px 10px; text-align: center; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Shift CSV → ICS Calendar</h1>
+    <p class="sub">Convert schedule CSV into timezone-aware ICS format with reminders.</p>
+    <div class="row" style="justify-content:flex-end; margin-top:8px;">
+      <button id="docsBtn" title="Open Documentation">Documentation</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <div class="grid">
+        <div>
+          <label for="csvFile">Upload shift CSV</label>
+          <input id="csvFile" type="file" accept=".csv" />
+        </div>
+        <div>
+          <label for="eventTitle">Event title template</label>
+          <input id="eventTitle" type="text" value="{name} shift" />
+          <div class="muted">Placeholders: <code>{name}</code>, <code>{date}</code>, <code>{weekday}</code></div>
+        </div>
+        <div>
+          <label for="srcTZ">Source Time Zone</label>
+          <select id="srcTZ"></select>
+        </div>
+        <div>
+          <label for="reminder">Reminder</label>
+          <div style="display:flex; gap:6px;">
+            <input id="reminderValue" type="number" value="2" min="0" max="12" style="width:80px;">
+            <select id="reminderUnit">
+              <option value="H">hours</option>
+              <option value="M">minutes</option>
+            </select>
+          </div>
+          <div class="muted">Default: 2 hours before</div>
+        </div>
+      </div>
+      <div class="row">
+        <button id="parseBtn">Parse & Preview</button>
+        <button id="downloadBtn" class="primary" disabled>Download ICS</button>
+      </div>
+    </section>
+
+    <section id="previewSection" class="card hidden">
+      <div class="row" style="justify-content:space-between; width:100%;">
+        <h3 style="margin:0; font-size:18px;">Preview <span class="pill" id="previewCount">0 events</span></h3>
+        <div>
+          <label for="nameSelector" class="muted">Filter by name:</label>
+          <select id="nameSelector"></select>
+        </div>
+      </div>
+
+      <div style="overflow:auto;">
+        <table id="previewTable">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="AnalyticsSection" class="card hidden">
+      <h3 style="margin:0 0 12px; font-size:18px;">Schedule Analytics</h3>
+      <div id="analyticsSummary" class="muted" style="margin-bottom:12px;"></div>
+      <div style="overflow:auto;">
+        <table id="analyticsTable">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    ICS converter © 2025 — Tailored for Google/Outlook/Apple Calendar
+  </footer>
+<script>
+  (function() {
+    // --- DOM Element References ---
+    const fileInput = document.getElementById('csvFile');
+    const parseBtn = document.getElementById('parseBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const previewSection = document.getElementById('previewSection');
+    const previewTableHead = document.querySelector('#previewTable thead');
+    const previewTableBody = document.querySelector('#previewTable tbody');
+    const previewCount = document.getElementById('previewCount');
+    const nameSelector = document.getElementById('nameSelector');
+    const docsBtn = document.getElementById('docsBtn');
+    const srcTZ = document.getElementById('srcTZ');
+    const reminderValue = document.getElementById('reminderValue');
+    const reminderUnit = document.getElementById('reminderUnit');
+    const analyticsSection = document.getElementById('AnalyticsSection');
+    const analyticsTableHead = document.querySelector('#analyticsTable thead');
+    const analyticsTableBody = document.querySelector('#analyticsTable tbody');
+    const analyticsSummary = document.getElementById('analyticsSummary');
+
+    // --- State Variables ---
+    let rawText = '';
+    let allEvents = [];
+    let currentMonthYear = ''; // e.g., "9_2025"
+
+    // --- Constants ---
+    const tzOptions = {
+      "Estonia (Tallinn)": "Europe/Tallinn",
+      "Germany": "Europe/Berlin",
+      "UK": "Europe/London",
+      "USA (NY)": "America/New_York",
+      "Philippines": "Asia/Manila",
+      "Singapore": "Asia/Singapore",
+      "India": "Asia/Kolkata",
+      "Japan": "Asia/Tokyo",
+      "Australia (Sydney)": "Australia/Sydney"
+    };
+
+    // --- Initialization ---
+    function initialize() {
+      // Populate timezone dropdown
+      for (const [label, tz] of Object.entries(tzOptions)) {
+        const opt = document.createElement('option');
+        opt.value = tz;
+        opt.textContent = label;
+        srcTZ.appendChild(opt);
+      }
+      srcTZ.value = "Europe/Tallinn";
+
+      // Attach event listeners
+      fileInput.addEventListener('change', handleFileSelect);
+      parseBtn.addEventListener('click', handleParse);
+      nameSelector.addEventListener('change', handleNameFilter);
+      downloadBtn.addEventListener('click', handleDownload);
+      if (docsBtn) {
+        docsBtn.addEventListener('click', () => {
+          window.location.href ='documentation.html';
+        });
+      }
+
+      // Prompt to open documentation on first load of the session
+      try {
+        const key = 'shift_csv_ics_docs_prompt_shown';
+        const hasShown = sessionStorage.getItem(key) === '1';
+        if (!hasShown) {
+          const shouldOpen = confirm('Need help? Open the Documentation page in a new tab.');
+          sessionStorage.setItem(key, '1');
+          if (shouldOpen) {
+            window.location.href('documentation.html');
+          }
+        }
+      } catch (_) { /* ignore storage errors */ }
+    }
+
+    // --- Event Handlers ---
+    function handleFileSelect() {
+      const file = fileInput.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        rawText = e.target.result;
+      };
+      reader.readAsText(file, 'utf-8');
+    }
+
+    function handleParse() {
+      if (!rawText) {
+        alert('Please choose a CSV file first.');
+        return;
+      }
+      const match = fileInput.files[0].name.match(/(\d{4})[_-](\d{1,2})/);
+      if (!match) {
+        alert('Could not detect year and month in the filename (e.g., "schedule_2025-09.csv").');
+        return;
+      }
+
+      const year = parseInt(match[1], 10);
+      const month = parseInt(match[2], 10);
+      const rows = parseCSV(rawText);
+
+      allEvents = buildEvents(rows, year, month);
+      currentMonthYear = `${month}_${year}`;
+
+      populateNameSelector(allEvents);
+      handleNameFilter(); // Initial render for "All"
+      downloadBtn.disabled = false;
+    }
+
+    function handleNameFilter() {
+      if (!currentMonthYear) return;
+      const [m, y] = currentMonthYear.split("_").map(p => parseInt(p, 10));
+      const month = m, year = y;
+
+      const selectedName = nameSelector.value;
+      const filteredEvents = selectedName === 'ALL' ?
+        allEvents :
+        allEvents.filter(e => e.name === selectedName);
+
+      renderPreview(filteredEvents);
+      renderAnalytics(filteredEvents, year, month);
+    }
+
+    function handleDownload() {
+      const selectedName = nameSelector.value;
+      const eventsToDownload = selectedName === 'ALL' ?
+        allEvents :
+        allEvents.filter(e => e.name === selectedName);
+
+      if (!eventsToDownload.length) {
+        alert('No events to download.');
+        return;
+      }
+      downloadICS(eventsToDownload);
+    }
+
+    // --- Data Processing Functions ---
+    function parseCSV(text) {
+      return text.split(/\r?\n/).map(row => row.split(",").map(cell => cell.trim()));
+    }
+
+    function parseTimeToMinutes(timeStr) {
+      if (!timeStr || /^vac/i.test(timeStr)) return null;
+      const match = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+      if (!match) return null;
+      return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+    }
+
+    function buildEvents(rows, year, month) {
+      const header = rows[0];
+      const nameIdx = header.findIndex(h => /^name$/i.test(h));
+      if (nameIdx === -1) {
+        alert('Error: No "Name" column found in the CSV header.');
+        throw new Error('No "Name" column found.');
+      }
+
+      const dayCols = header.map((h, idx) => {
+        const match = h.match(/(\d{1,2})$/);
+        if (match) {
+          const day = parseInt(match[1], 10);
+          if (day >= 1 && day <= 31) return { idx, day };
+        }
+        return null;
+      }).filter(Boolean);
+
+      const events = [];
+      for (let r = 1; r < rows.length; r++) {
+        const row = rows[r];
+        const name = row[nameIdx];
+        if (!name) continue;
+
+        const endRow = rows[r + 1] || [];
+        if (endRow[nameIdx]) continue;
+
+        for (const { idx, day } of dayCols) {
+          const startMin = parseTimeToMinutes(row[idx]);
+          const endMin = parseTimeToMinutes(endRow[idx]);
+
+          if (startMin === null || endMin === null) continue;
+
+          let startDate = new Date(year, month - 1, day, Math.floor(startMin / 60), startMin % 60);
+          let endDate = new Date(year, month - 1, day, Math.floor(endMin / 60), endMin % 60);
+
+          if (endMin <= startMin) {
+            endDate.setDate(endDate.getDate() + 1);
+          }
+
+          const durationHours = (endDate - startDate) / 3600000;
+
+          events.push({
+            name,
+            startDate,
+            endDate,
+            hour: durationHours,
+            location: "Office",
+            subject: null,
+          });
+        }
+      }
+      return events;
+    }
+
+    // --- Rendering Functions ---
+    function populateNameSelector(events) {
+      const names = [...new Set(events.map(e => e.name))].sort();
+      nameSelector.innerHTML = '<option value="ALL">All</option>';
+      for (const name of names) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        nameSelector.appendChild(opt);
+      }
+    }
+
+    function renderPreview(events) {
+      previewSection.style.display = 'block';
+      previewTableHead.innerHTML = `
+        <tr>
+          <th>Name</th>
+          <th>Start Date</th>
+          <th>Start Time</th>
+          <th>End Date</th>
+          <th>End Time</th>
+          <th>Hours</th>
+          <th>Location</th>
+          <th>Notes</th>
+        </tr>
+      `;
+      previewTableBody.innerHTML = '';
+
+      const subjectTemplate = document.getElementById("eventTitle").value || "{name} shift";
+      const eventsToShow = events.slice(0, 50);
+
+      for (const event of eventsToShow) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${event.name}</td>
+          <td>${formatDate(event.startDate)}</td>
+          <td>${formatTime(event.startDate)}</td>
+          <td>${formatDate(event.endDate)}</td>
+          <td>${formatTime(event.endDate)}</td>
+          <td>${event.hour.toFixed(2)}</td>
+        `;
+
+        const tdLoc = document.createElement('td');
+        const sel = document.createElement('select');
+        sel.className = "location-cell";
+        ["Office", "Home"].forEach(optVal => {
+          const opt = document.createElement('option');
+          opt.value = optVal;
+          opt.textContent = optVal;
+          sel.appendChild(opt);
+        });
+        sel.value = event.location;
+        sel.addEventListener('change', (ev) => {
+          event.location = ev.target.value;
+        });
+        tdLoc.appendChild(sel);
+        tr.appendChild(tdLoc);
+
+        if (!event.subject) {
+          event.subject = formatSubject(subjectTemplate, event.name, event.startDate);
+        }
+        const tdNote = document.createElement('td');
+        const noteTextSpan = document.createElement('span');
+        noteTextSpan.textContent = event.subject + ' ';
+        tdNote.appendChild(noteTextSpan);
+
+        const editBtn = document.createElement('button');
+        editBtn.innerHTML = '&#128393;';
+        editBtn.title = 'Edit Note';
+
+        editBtn.addEventListener('click', () => {
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.value = event.subject;
+
+          noteTextSpan.textContent = '';
+          noteTextSpan.appendChild(input);
+          editBtn.style.display = 'none';
+          input.focus();
+
+          const saveChanges = () => {
+            event.subject = input.value;
+            noteTextSpan.textContent = event.subject + ' ';
+            editBtn.style.display = 'inline';
+          };
+
+          input.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter') saveChanges();
+            if (ev.key === 'Escape') {
+              noteTextSpan.textContent = event.subject + ' ';
+              editBtn.style.display = 'inline';
+            }
+          });
+          input.addEventListener('blur', saveChanges);
+        });
+        tdNote.appendChild(editBtn);
+        tr.appendChild(tdNote);
+
+        previewTableBody.appendChild(tr);
+      }
+      previewCount.textContent = `${events.length} events found. Showing ${eventsToShow.length}.`;
+    }
+
+    // --- Analytics with proper Date overlap handling ---
+    function renderAnalytics(events, year, month) {
+      function overlapHours(aStart, aEnd, bStart, bEnd) {
+        const s = Math.max(aStart.getTime(), bStart.getTime());
+        const e = Math.min(aEnd.getTime(), bEnd.getTime());
+        if (e <= s) return 0;
+        return (e - s) / 3600000;
+      }
+
+      analyticsSection.classList.remove('hidden');
+      analyticsTableHead.innerHTML = '';
+      analyticsTableBody.innerHTML = '';
+
+      if (!events || events.length === 0) {
+        analyticsSummary.textContent = "No events available for analytics.";
+        return;
+      }
+
+      const weeks = getWeeksInMonth(year, month);
+      const isAllSelected = nameSelector.value === 'ALL';
+
+      const trh = document.createElement('tr');
+      let headerHTML = isAllSelected ? '<th>Name</th>' : '';
+      weeks.forEach(w => {
+        headerHTML += `<th>Week ${pad(w.start.getMonth()+1)}/${pad(w.start.getDate())} - ${pad(w.end.getMonth()+1)}/${pad(w.end.getDate())}</th>`;
+      });
+      headerHTML += '<th>Total Hours</th>';
+      trh.innerHTML = headerHTML;
+      analyticsTableHead.appendChild(trh);
+
+      const eventsByName = {};
+      events.forEach(e => {
+        if (!eventsByName[e.name]) eventsByName[e.name] = [];
+        eventsByName[e.name].push(e);
+      });
+
+      const monthStart = new Date(year, month - 1, 1, 0, 0, 0, 0);
+      const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
+
+      const weeklyTotals = new Array(weeks.length).fill(0);
+      let grandTotal = 0;
+
+      for (const [name, userEvents] of Object.entries(eventsByName)) {
+        if (!isAllSelected && name !== nameSelector.value) continue;
+
+        const tr = document.createElement('tr');
+        let rowHTML = isAllSelected ? `<td>${name}</td>` : '';
+        let totalHoursForPerson = 0;
+
+        weeks.forEach((w, i) => {
+          // Use the full week boundaries (Sunday to Saturday)
+          const weekStart = new Date(w.start);
+          const weekEnd = new Date(w.end);
+          
+          // Set proper time boundaries for the week
+          weekStart.setHours(0, 0, 0, 0); // Start of Sunday
+          weekEnd.setHours(23, 59, 59, 999); // End of Saturday
+
+          const eventsInWeek = userEvents.filter(e => {
+            const evStart = (e.startDate instanceof Date) ? e.startDate : new Date(e.startDate);
+            const evEnd = (e.endDate instanceof Date) ? e.endDate : new Date(e.endDate);
+            
+            // Check if event overlaps with the week
+            const hasOverlap = evStart < weekEnd && evEnd > weekStart;
+            if (hasOverlap) {
+              console.log(`Event: ${evStart.toISOString()} to ${evEnd.toISOString()}`);
+            }
+            return hasOverlap;
+          });
+          
+          console.log(`Events in this week: ${eventsInWeek.length}`);
+
+          const hoursInWeek = eventsInWeek.reduce((sum, e) => {
+            const evStart = (e.startDate instanceof Date) ? e.startDate : new Date(e.startDate);
+            const evEnd = (e.endDate instanceof Date) ? e.endDate : new Date(e.endDate);
+            const overlap = overlapHours(evStart, evEnd, weekStart, weekEnd);
+            console.log(`  Overlap hours: ${overlap.toFixed(2)}`);
+            return sum + overlap;
+          }, 0);
+
+          console.log(`Total hours in week: ${hoursInWeek.toFixed(2)}`);
+
+          totalHoursForPerson += hoursInWeek;
+          rowHTML += `<td>${hoursInWeek.toFixed(1)}</td>`;
+          if (isAllSelected) weeklyTotals[i] += hoursInWeek;
+        });
+
+        rowHTML += `<td><b>${totalHoursForPerson.toFixed(1)}</b></td>`;
+        tr.innerHTML = rowHTML;
+        analyticsTableBody.appendChild(tr);
+
+        if (isAllSelected) grandTotal += totalHoursForPerson;
+      }
+
+      if (isAllSelected) {
+        const trTotal = document.createElement('tr');
+        let rowHTML = `<td><b>Totals</b></td>`;
+        weeklyTotals.forEach(h => rowHTML += `<td><b>${h.toFixed(1)}</b></td>`);
+        rowHTML += `<td><b>${grandTotal.toFixed(1)}</b></td>`;
+        trTotal.innerHTML = rowHTML;
+        trTotal.style.backgroundColor = '#f8fafc';
+        analyticsTableBody.appendChild(trTotal);
+      }
+
+      const workedDaysSet = new Set(
+        events
+          .filter(e => {
+            const sd = (e.startDate instanceof Date) ? e.startDate : new Date(e.startDate);
+            return sd.getFullYear() === year && sd.getMonth() === (month - 1);
+          })
+          .map(e => (new Date(e.startDate)).getDate())
+      );
+      const totalDaysInMonth = daysInMonth(year, month);
+      const workCount = workedDaysSet.size;
+      const restCount = totalDaysInMonth - workCount;
+      analyticsSummary.textContent = `This month has ${totalDaysInMonth} days. Worked: ${workCount}, Rest: ${restCount}.`;
+    }
+
+    // --- ICS File Generation ---
+    function downloadICS(events) {
+      const tzid = srcTZ.value;
+      const val = parseInt(reminderValue.value, 10);
+      const unit = reminderUnit.value;
+      const trigger = val > 0 ? `-PT${val}${unit}` : null;
+
+      const icsParts = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//ShiftParser//EN',
+        'CALSCALE:GREGORIAN',
+        `BEGIN:VTIMEZONE`,
+        `TZID:${tzid}`,
+        `BEGIN:STANDARD`,
+        `DTSTART:19700101T000000`,
+        `TZOFFSETFROM:+0000`,
+        `TZOFFSETTO:+0000`,
+        `TZNAME:STD`,
+        `END:STANDARD`,
+        `END:VTIMEZONE`,
+      ];
+
+      for (const event of events) {
+        const uid = `uid-${Math.random().toString(36).substring(2)}@shiftparser.local`;
+        const dtstamp = new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+        const location = event.location === "Office" ?
+          "ground floor, Montage building, Recruitment hub at the Lower, Archbishop Reyes Ave, Cebu City, Philippines" :
+          "Home";
+
+        icsParts.push('BEGIN:VEVENT');
+        icsParts.push(`UID:${uid}`);
+        icsParts.push(`DTSTAMP:${dtstamp}`);
+        icsParts.push(`SUMMARY:${event.subject}`);
+        icsParts.push(`DTSTART;TZID=${tzid}:${formatICSDate(event.startDate)}`);
+        icsParts.push(`DTEND;TZID=${tzid}:${formatICSDate(event.endDate)}`);
+        icsParts.push(`LOCATION:${location}`);
+        icsParts.push('DESCRIPTION:Auto-imported from schedule');
+        icsParts.push('TRANSP:TRANSPARENT');
+        icsParts.push('X-MICROSOFT-CDO-BUSYSTATUS:FREE');
+
+        if (trigger) {
+          icsParts.push('BEGIN:VALARM');
+          icsParts.push(`TRIGGER:${trigger}`);
+          icsParts.push('ACTION:DISPLAY');
+          icsParts.push('DESCRIPTION:Reminder');
+          icsParts.push('END:VALARM');
+        }
+
+        icsParts.push('END:VEVENT');
+      }
+
+      icsParts.push('END:VCALENDAR');
+
+      const blob = new Blob([icsParts.join('\r\n')], {
+        type: 'text/calendar;charset=utf-8;'
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const filename = `${nameSelector.value.replace(/\s/g, '_')}_Work_Shift_${currentMonthYear}.ics`;
+
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    // --- Utility Functions ---
+    function pad(n) { return String(n).padStart(2, '0'); }
+    function formatDate(dt) { return `${pad(dt.getMonth() + 1)}/${pad(dt.getDate())}`; }
+    function formatTime(dt) { return `${pad(dt.getHours())}:${pad(dt.getMinutes())}`; }
+    function formatICSDate(dt) {
+      return `${dt.getFullYear()}${pad(dt.getMonth() + 1)}${pad(dt.getDate())}T${pad(dt.getHours())}${pad(dt.getMinutes())}00`;
+    }
+    function formatSubject(template, name, date) {
+      const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][date.getDay()];
+      return template
+        .replace("{name}", name)
+        .replace("{date}", `${pad(date.getMonth() + 1)}/${pad(date.getDate())}/${date.getFullYear()}`)
+        .replace("{weekday}", weekday);
+    }
+    function daysInMonth(year, month) { return new Date(year, month, 0).getDate(); }
+
+    function getWeeksInMonth(year, month) {
+      const weeks = [];
+      const monthStart = new Date(year, month - 1, 1);
+      const monthEnd = new Date(year, month, 0); // Last day of the month
+      
+      // Find the Sunday of the week that contains the first day of the month
+      let currentDay = new Date(monthStart);
+      currentDay.setDate(currentDay.getDate() - currentDay.getDay()); // Go back to Sunday
+      
+      // Generate weeks that overlap with the month
+      while (currentDay <= monthEnd) {
+        const weekStart = new Date(currentDay);
+        const weekEnd = new Date(currentDay);
+        weekEnd.setDate(weekStart.getDate() + 6); // Saturday
+        
+        // Only include weeks that have at least one day in the target month
+        if (weekEnd >= monthStart && weekStart <= monthEnd) {
+          weeks.push({ 
+            start: weekStart, 
+            end: weekEnd 
+          });
+        }
+        
+        // Move to next Sunday
+        currentDay.setDate(currentDay.getDate() + 7);
+      }
+      
+      return weeks;
+    }
+
+    // --- Run Initialization ---
+    initialize();
+  })();
+</script>
+
+
+</body>
+</html>

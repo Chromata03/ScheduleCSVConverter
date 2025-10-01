@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Documentation - Shift CSV → ICS Calendar</title>
+  <style>
+    :root { 
+      --bg:#f7f9fc; --fg:#1c1e21; --muted:#606770; --card:#ffffff; 
+      --accent:#4f8ef7; --accent-hover:#3d75d8;
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font:16px/1.5 "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--fg); }
+    header { padding:24px; border-bottom:1px solid #ddd; background:#fff; position:sticky; top:0; z-index:10;}
+    h1 { margin:0 0 8px; font-size:22px; font-weight:600; }
+    p.sub { margin:0; color:var(--muted); }
+    main { padding:24px; max-width:1200px; margin:0 auto; }
+    .grid { display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .card { background:var(--card); border:1px solid #e5e7eb; border-radius:16px; padding:20px; box-shadow:0 4px 10px rgba(0,0,0,0.05); }
+    label { font-weight:600; font-size:14px; display:block; margin-bottom:6px; }
+    input[type="text"], input[type="number"], select { width:100%; padding:10px 12px; border-radius:12px; border:1px solid #ccd0d5; background:#fff; color:var(--fg); font-size:14px; }
+    input[type="file"] { width:100%; }
+    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:16px; }
+    .muted { color:var(--muted); font-size:13px; }
+    button { cursor:pointer; padding:10px 16px; border-radius:12px; font-weight:600; font-size:14px; transition:0.2s; }
+    button.primary { background:var(--accent); color:#fff; border:1px solid transparent; }
+    button.primary:hover { background:var(--accent-hover); }
+    button:disabled { opacity:0.6; cursor:not-allowed; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th, td { text-align:left; border-bottom:1px solid #eee; padding:8px 10px; }
+    select.location-cell { padding:4px 6px; border-radius:6px; border:1px solid #ccc; font-size:13px; }
+    .pill { display:inline-block; padding:3px 10px; border-radius:999px; background:#eef2ff; color:#3740a0; font-size:12px; }
+    footer { padding:16px 24px; color:var(--muted); border-top:1px solid #ddd; text-align:center; font-size:13px; }
+    .tooltip-wrapper { position: relative; display: inline-block; }
+    .tooltip-text { position: absolute; top: -28px; right: 0; background: #333; color: #fff; font-size: 12px; padding: 4px 8px; border-radius: 4px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.2s ease-in-out; }
+    .tooltip-wrapper input:focus + .tooltip-text { opacity: 1; }
+    #analyticsTable th, #analyticsTable td { border-bottom: 1px solid #eee; padding: 8px 10px; text-align: center; }
+    .hidden { display: none; }
+    
+    /* Documentation specific styles */
+    .nav-link { 
+      display: inline-block; 
+      padding: 8px 16px; 
+      margin: 4px; 
+      background: var(--card); 
+      border: 1px solid #e5e7eb; 
+      border-radius: 8px; 
+      text-decoration: none; 
+      color: var(--fg); 
+      transition: all 0.2s;
+    }
+    .nav-link:hover { 
+      background: var(--accent); 
+      color: white; 
+      border-color: var(--accent);
+    }
+    .nav-link.active { 
+      background: var(--accent); 
+      color: white; 
+      border-color: var(--accent);
+    }
+    .section { margin-bottom: 40px; }
+    .section h2 { 
+      color: var(--accent); 
+      border-bottom: 2px solid var(--accent); 
+      padding-bottom: 8px; 
+      margin-bottom: 16px;
+    }
+    .section h3 { 
+      color: var(--fg); 
+      margin-top: 24px; 
+      margin-bottom: 12px;
+    }
+    .code-block { 
+      background: #f8f9fa; 
+      border: 1px solid #e9ecef; 
+      border-radius: 8px; 
+      padding: 16px; 
+      margin: 12px 0; 
+      font-family: 'Courier New', monospace; 
+      font-size: 14px; 
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .step { 
+      background: #f8f9fa; 
+      border-left: 4px solid var(--accent); 
+      padding: 12px 16px; 
+      margin: 8px 0; 
+      border-radius: 0 8px 8px 0;
+    }
+    .feature-grid { 
+      display: grid; 
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+      gap: 16px; 
+      margin: 16px 0;
+    }
+    .feature-card { 
+      background: var(--card); 
+      border: 1px solid #e5e7eb; 
+      border-radius: 12px; 
+      padding: 16px; 
+      text-align: center;
+    }
+    .feature-icon { 
+      font-size: 24px; 
+      margin-bottom: 8px; 
+      display: block;
+    }
+    .warning { 
+      background: #fff3cd; 
+      border: 1px solid #ffeaa7; 
+      border-radius: 8px; 
+      padding: 12px; 
+      margin: 12px 0; 
+      color: #856404;
+    }
+    .success { 
+      background: #d4edda; 
+      border: 1px solid #c3e6cb; 
+      border-radius: 8px; 
+      padding: 12px; 
+      margin: 12px 0; 
+      color: #155724;
+    }
+    .screenshot-placeholder { 
+      background: #f8f9fa; 
+      border: 2px dashed #dee2e6; 
+      border-radius: 8px; 
+      padding: 40px; 
+      text-align: center; 
+      color: var(--muted); 
+      margin: 16px 0;
+    }
+    .toc { 
+      background: var(--card); 
+      border: 1px solid #e5e7eb; 
+      border-radius: 12px; 
+      padding: 20px; 
+      margin-bottom: 24px;
+    }
+    .toc h3 { margin-top: 0; color: var(--accent); }
+    .toc ul { list-style: none; padding-left: 0; }
+    .toc li { margin: 8px 0; }
+    .toc a { 
+      color: var(--fg); 
+      text-decoration: none; 
+      padding: 4px 8px; 
+      border-radius: 4px; 
+      transition: background 0.2s;
+    }
+    .toc a:hover { background: #f8f9fa; }
+    
+    /* Navigation improvements */
+    .nav-container { 
+      display: flex; 
+      flex-wrap: wrap; 
+      gap: 8px; 
+      margin-top: 16px; 
+    }
+    
+    @media (max-width: 768px) {
+      .nav-container { 
+        flex-direction: column; 
+        align-items: flex-start; 
+      }
+      .nav-link { 
+        width: 100%; 
+        text-align: center; 
+        margin: 2px 0; 
+      }
+      main { 
+        padding: 16px; 
+      }
+      header { 
+        padding: 16px; 
+      }
+    }
+
+    /* Image presentation */
+    .img-responsive {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 12px auto;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .img-clickable { cursor: zoom-in; }
+    .img-caption { text-align: center; color: var(--muted); font-size: 13px; margin-top: 6px; }
+
+    /* Fullscreen image modal */
+    .img-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 1000;
+    }
+    .img-modal-content {
+      position: relative;
+      max-width: 95vw;
+      max-height: 90vh;
+    }
+    .img-modal-content img {
+      max-width: 95vw;
+      max-height: 90vh;
+      width: auto;
+      height: auto;
+      display: block;
+      border-radius: 8px;
+    }
+    .img-modal-close {
+      position: absolute;
+      top: -10px;
+      right: -10px;
+      background: #fff;
+      color: #111;
+      border: 1px solid #ddd;
+      border-radius: 999px;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📚 Documentation - Shift CSV → ICS Calendar</h1>
+    <p class="sub">Complete guide to using the CSV to ICS calendar converter</p>
+    <div class="nav-container">
+      <a href="index.html" class="nav-link">← Back to App</a>
+      <a href="#overview" class="nav-link">Overview</a>
+      <a href="#quick-start" class="nav-link">Quick Start</a>
+      <a href="#file-format" class="nav-link">File Format</a>
+      <a href="#usage" class="nav-link">Usage Guide</a>
+      <a href="#troubleshooting" class="nav-link">Troubleshooting</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="card toc">
+      <h3>📋 Table of Contents</h3>
+      <ul>
+        <li><a href="#overview">Overview & Features</a></li>
+        <li><a href="#quick-start">Quick Start Guide</a></li>
+        <li><a href="#file-format">CSV File Format Requirements</a></li>
+        <li><a href="#usage">Detailed Usage Instructions</a></li>
+        <li><a href="#calendar-integration">Calendar Integration</a></li>
+        <li><a href="#advanced-features">Advanced Features</a></li>
+        <li><a href="#troubleshooting">Troubleshooting</a></li>
+        <li><a href="#technical-details">Technical Details</a></li>
+      </ul>
+    </section>
+
+    <section id="overview" class="card section">
+      <h2>🎯 Overview</h2>
+      <p>The Shift CSV → ICS Calendar Converter is a modern, user-friendly web application that transforms work shift schedules from CSV format into ICS calendar files. This tool is perfect for teams, managers, and employees who need to import their work schedules into their preferred calendar applications.</p>
+      
+      <div class="feature-grid">
+        <div class="feature-card">
+          <span class="feature-icon">📅</span>
+          <h4>CSV to ICS Conversion</h4>
+          <p>Convert shift schedules directly to calendar format with timezone support</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🌍</span>
+          <h4>Timezone Support</h4>
+          <p>Handle multiple timezones including Estonia, Germany, UK, USA, Philippines, and more</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">⚙️</span>
+          <h4>Customizable Events</h4>
+          <p>Edit event titles, locations, and notes to match your preferences</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🔔</span>
+          <h4>Smart Reminders</h4>
+          <p>Set custom reminder times (hours or minutes before events)</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">📊</span>
+          <h4>Schedule Analytics</h4>
+          <p>View weekly and monthly work hour summaries</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">👥</span>
+          <h4>Filter by Employee</h4>
+          <p>Preview and download schedules for specific team members</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="quick-start" class="card section">
+      <h2>🚀 Quick Start Guide</h2>
+      
+      <div class="step">
+        <h3>Step 1: Download the Application</h3>
+        <p>Download <code>csv_parser.html</code> to your computer and open it in any modern web browser (Chrome, Firefox, Safari, Edge).</p>
+      </div>
+
+      <div class="step">
+        <h3>Step 2: Get Your Schedule</h3>
+        <p>
+          Download your latest <a href="https://kuehnenagel.sharepoint.com/sites/GlobalServiceDeskITGlobal/Freigegebene%20Dokumente/Forms/AllItems.aspx?id=%2Fsites%2FGlobalServiceDeskITGlobal%2FFreigegebene%20Dokumente%2FSchedule&viewid=a5d73d7d%2D90eb%2D43b2%2D8077%2D2dd701d183d1&csf=1&web=1&e=ZBhjqH&CID=e108bb85%2Dc41f%2D49b2%2D861a%2D14d5e13e2e19&FolderCTID=0x012000AC299AA305612F40868D63DEBA6565F8" target="_blank" rel="noopener noreferrer">Schedule</a>.
+        </p>
+        <p>
+          Not from the <i>GSD TEAM</i>? Ensure your schedule matches the preferred layout below for best accuracy:
+        </p>
+        <figure>
+          <img src="img/Schedule_Layout.png" alt="Schedule Preferred Layout" class="img-responsive img-clickable" data-caption="Preferred schedule layout (Name row with start times, next row with end times)">
+          <figcaption class="img-caption">Click the image to view fullscreen</figcaption>
+        </figure>
+      </div>
+
+      <div class="step">
+        <h3>Step 3: Convert Your Schedule to CSV</h3>
+        <p>Export your Excel schedule to a <code>.csv</code> file:</p>
+        <ol>
+          <li>File → Export → Change File Type → Select <code>CSV (Comma delimited) (*.csv)</code></li>
+          <li>Or File → Save As → Change the file type from <code>.xlsx</code> or <code>.xlsm</code> to <code>.csv</code></li>
+        </ol>
+        <p>Make sure the filename ends with <code>_YYYY_MM</code> or <code>_YYYY-MM</code>.</p>
+      </div>
+
+      <div class="step">
+        <h3>Step 4: Upload and Parse</h3>
+        <p>Click "Choose File" and select your schedule CSV. Then click "Parse & Preview" to generate events.</p>
+      </div>
+
+
+      <div class="success">
+        <strong>✅ Success!</strong> Your schedule is now ready to import into Google Calendar, Outlook, Apple Calendar, or any other calendar application that supports ICS files.
+      </div>
+    </section>
+
+    <section id="file-format" class="card section">
+      <h2>📁 CSV File Format Requirements</h2>
+      
+      <h3>File Rules</h3>
+      <div class="warning">
+        <strong>⚠️ Important:</strong> Your CSV file must follow these exact requirements for the application to work properly.
+      </div>
+
+      <h4>1. File Extension</h4>
+      <p>Must be <code>.csv</code></p>
+
+      <h4>2. Filename Format</h4>
+      <p>Must contain month and year as <code>*_&lt;Year&gt;_&lt;Month&gt;_.csv</code></p>
+      <div class="code-block">
+✅ Valid: schedule_2025_01.csv, shifts_2025_12.csv
+❌ Invalid: schedule.csv, january2025.csv
+      </div>
+
+      <h4>3. CSV Structure</h4>
+      <p>Your CSV must follow this exact format:</p>
+      <div class="code-block">
+Name,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
+John Doe,09:00,09:00,OFF,09:00,09:00,OFF,OFF,09:00,09:00,09:00,OFF,09:00,09:00,OFF,OFF,09:00,09:00,09:00,OFF,09:00,09:00,OFF,OFF,09:00,09:00,09:00,OFF,09:00,09:00,OFF,OFF
+,17:00,17:00,,17:00,17:00,,,,17:00,17:00,17:00,,17:00,17:00,,,,17:00,17:00,17:00,,17:00,17:00,,,,17:00,17:00,17:00,,17:00,17:00,,,
+Jane Smith,OFF,OFF,09:00,OFF,OFF,09:00,09:00,OFF,OFF,OFF,09:00,OFF,OFF,09:00,09:00,OFF,OFF,OFF,09:00,OFF,OFF,09:00,09:00,OFF,OFF,OFF,09:00,OFF,OFF,09:00,09:00
+,,,17:00,,,17:00,17:00,,,,17:00,,,17:00,17:00,,,,17:00,,,17:00,17:00,,,,17:00,,,17:00,17:00
+      </div>
+
+      <h4>Key Points:</h4>
+      <ul>
+        <li><strong>First row:</strong> Column headers with "Name" and day numbers (1-31)</li>
+        <li><strong>Even rows:</strong> Employee names and start times (HH:MM format)</li>
+        <li><strong>Odd rows:</strong> Corresponding end times (leave empty for OFF days)</li>
+        <li><strong>Days off:</strong> Use "OFF" or "vac" for days off</li>
+        <li><strong>Time format:</strong> 24-hour format (e.g., 09:00, 17:00)</li>
+      </ul>
+    </section>
+
+    <section id="usage" class="card section">
+      <h2>📖 Detailed Usage Instructions</h2>
+      
+      <h3>Step 1: Upload Your CSV File</h3>
+      <div class="step">
+        <p>Click "Choose File" and select your schedule CSV. Ensure the filename contains the correct month and year format.</p>
+      </div>
+
+      <h3>Step 2: Configure Settings</h3>
+      <div class="step">
+        <h4>Event Title Template</h4>
+        <p>Customize how events appear in your calendar using these placeholders:</p>
+        <ul>
+          <li><code>{name}</code> - Employee name</li>
+          <li><code>{date}</code> - Event date (MM/DD/YYYY)</li>
+          <li><code>{weekday}</code> - Day of the week (Mon, Tue, etc.)</li>
+        </ul>
+      </div>
+
+      <div class="step">
+        <h4>Source Time Zone</h4>
+        <p>Select your local timezone from the dropdown menu. The application supports multiple timezones including Estonia, Germany, UK, USA, Philippines, Singapore, India, Japan, and Australia.</p>
+      </div>
+
+      <div class="step">
+        <h4>Reminder Settings</h4>
+        <p>Set how far in advance you want to be reminded of your shifts. You can choose between hours or minutes.</p>
+      </div>
+
+      <h3>Step 3: Parse and Preview</h3>
+      <div class="step">
+        <p>Click "Parse & Preview" to process your CSV. Review the generated events in the preview table, edit locations (Office/Home) and event notes as needed, and use the name filter to view specific employees.</p>
+      </div>
+
+      <h3>Step 4: Download ICS File</h3>
+      <div class="step">
+        <p>Click "Download ICS" to generate your calendar file. The file will be named based on your selection (All employees or specific person). Import the ICS file into your preferred calendar application.</p>
+      </div>
+    </section>
+
+    <section id="calendar-integration" class="card section">
+      <h2>🗓️ Calendar Integration</h2>
+      
+      <h3>Google Calendar</h3>
+      <div class="step">
+        <ol>
+          <li>Open Google Calendar</li>
+          <li>Click the "+" button and select "Import"</li>
+          <li>Choose your downloaded ICS file</li>
+          <li>Select which calendar to import to</li>
+          <li>Click "Import"</li>
+        </ol>
+      </div>
+
+      <h3>Microsoft Outlook</h3>
+      <div class="step">
+        <ol>
+          <li>Open Outlook</li>
+          <li>Go to File → Open & Export → Import/Export</li>
+          <li>Select "Import an iCalendar (.ics) or vCalendar file"</li>
+          <li>Choose your downloaded ICS file</li>
+          <li>Follow the import wizard</li>
+        </ol>
+      </div>
+
+      <h3>Apple Calendar</h3>
+      <div class="step">
+        <ol>
+          <li>Open Calendar app</li>
+          <li>Go to File → Import</li>
+          <li>Select your downloaded ICS file</li>
+          <li>Choose which calendar to import to</li>
+          <li>Click "Import"</li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="advanced-features" class="card section">
+      <h2>🔧 Advanced Features</h2>
+      
+      <h3>Schedule Analytics</h3>
+      <p>The application provides comprehensive analytics including:</p>
+      <ul>
+        <li>Weekly work hour summaries</li>
+        <li>Total hours per employee</li>
+        <li>Work vs. rest day distribution</li>
+        <li>Filter analytics by specific employees</li>
+      </ul>
+
+      <h3>Customization Options</h3>
+      <p>You can customize various aspects of your calendar events:</p>
+      <ul>
+        <li>Edit event titles and descriptions</li>
+        <li>Set different locations (Office/Home)</li>
+        <li>Configure reminder times</li>
+        <li>Filter events by employee name</li>
+      </ul>
+
+      <h3>Timezone Handling</h3>
+      <p>The application properly handles timezone conversions and daylight saving time changes for all supported regions.</p>
+    </section>
+
+    <section id="troubleshooting" class="card section">
+      <h2>📝 Troubleshooting</h2>
+      
+      <h3>Common Issues</h3>
+      
+      <div class="warning">
+        <strong>"Could not detect year and month in filename"</strong><br>
+        Ensure your filename contains the format <code>*_&lt;Year&gt;_&lt;Month&gt;_.csv</code><br>
+        Example: <code>schedule_2025_01.csv</code>
+      </div>
+
+      <div class="warning">
+        <strong>"No 'Name' column found"</strong><br>
+        Make sure your CSV has a column header exactly named "Name"<br>
+        Check for typos or extra spaces
+      </div>
+
+      <div class="warning">
+        <strong>Events not showing correct times</strong><br>
+        Verify your CSV uses 24-hour format (HH:MM)<br>
+        Check that start and end times are in the correct rows
+      </div>
+
+      <div class="warning">
+        <strong>ICS file not importing</strong><br>
+        Ensure your calendar application supports ICS format<br>
+        Try importing a smaller subset of events first<br>
+        Check that the file isn't corrupted during download
+      </div>
+    </section>
+
+    <section id="technical-details" class="card section">
+      <h2>🛠️ Technical Details</h2>
+      
+      <ul>
+        <li><strong>Built with:</strong> HTML5, CSS3, Vanilla JavaScript</li>
+        <li><strong>Browser Support:</strong> All modern browsers (Chrome, Firefox, Safari, Edge)</li>
+        <li><strong>File Processing:</strong> Client-side only (no data sent to servers)</li>
+        <li><strong>ICS Standard:</strong> RFC 5545 compliant</li>
+        <li><strong>Timezone Database:</strong> Uses browser's Intl.DateTimeFormat API</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>🖼️ Screenshots</h2>
+      <p>Click any image to view it fullscreen.</p>
+      
+      <figure>
+        <img src="img/Schedule_Layout.png" alt="Preferred schedule layout" class="img-responsive img-clickable" data-caption="Preferred schedule layout for accurate parsing">
+        <figcaption class="img-caption">Preferred schedule layout</figcaption>
+      </figure>
+
+      <figure>
+        <img src="img/Main_Interface.png" alt="Main Interface - upload and configure" class="img-responsive img-clickable" data-caption="Main Interface - upload CSV and configure settings">
+        <figcaption class="img-caption">Main Interface</figcaption>
+      </figure>
+
+      <figure>
+        <img src="img/Analytics_All.png" alt="Analytics - all users" class="img-responsive img-clickable" data-caption="Analytics view showing total hours for all users by week">
+        <figcaption class="img-caption">Analytics (All)</figcaption>
+      </figure>
+
+      <figure>
+        <img src="img/Analytics_Filtered.png" alt="Analytics - filtered by name" class="img-responsive img-clickable" data-caption="Analytics filtered by a specific name">
+        <figcaption class="img-caption">Analytics (Filtered)</figcaption>
+      </figure>
+
+      <figure>
+        <img src="img/gCalendar_Integration.png" alt="Google Calendar integration - imported events" class="img-responsive img-clickable" data-caption="Imported events in Google Calendar">
+        <figcaption class="img-caption">Google Calendar Integration</figcaption>
+      </figure>
+
+      <!-- Add more figures below when screenshots are available -->
+      <!--
+      <figure>
+        <img src="screenshots/main-interface.png" alt="Main interface" class="img-responsive img-clickable" data-caption="Main interface - upload and configure settings">
+        <figcaption class="img-caption">Main interface</figcaption>
+      </figure>
+
+      <figure>
+        <img src="screenshots/preview-analytics.png" alt="Preview and analytics" class="img-responsive img-clickable" data-caption="Preview events and view work hour analytics">
+        <figcaption class="img-caption">Preview and analytics</figcaption>
+      </figure>
+
+      <figure>
+        <img src="screenshots/calendar-integration.png" alt="Calendar integration" class="img-responsive img-clickable" data-caption="Imported events in calendar">
+        <figcaption class="img-caption">Calendar integration</figcaption>
+      </figure>
+      -->
+    </section>
+  </main>
+
+  <footer>
+    Documentation for Shift CSV → ICS Calendar Converter © 2025 — Made with ❤️ for efficient schedule management
+  </footer>
+
+  <script>
+    // Smooth scrolling for navigation links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+          });
+        }
+      });
+    });
+
+    // Update active navigation link based on scroll position
+    window.addEventListener('scroll', function() {
+      const sections = document.querySelectorAll('.section');
+      const navLinks = document.querySelectorAll('.nav-link[href^="#"]');
+      
+      let current = '';
+      sections.forEach(section => {
+        const sectionTop = section.offsetTop;
+        const sectionHeight = section.clientHeight;
+        if (window.pageYOffset >= (sectionTop - 200)) {
+          current = section.getAttribute('id');
+        }
+      });
+
+      navLinks.forEach(link => {
+        link.classList.remove('active');
+        if (link.getAttribute('href') === '#' + current) {
+          link.classList.add('active');
+        }
+      });
+    });
+
+    // Image modal (click to fullscreen)
+    function openImageModal(src, alt, caption) {
+      const backdrop = document.createElement('div');
+      backdrop.className = 'img-modal-backdrop';
+      backdrop.addEventListener('click', close);
+
+      const content = document.createElement('div');
+      content.className = 'img-modal-content';
+
+      const img = document.createElement('img');
+      img.src = src;
+      img.alt = alt || '';
+
+      const btn = document.createElement('button');
+      btn.className = 'img-modal-close';
+      btn.type = 'button';
+      btn.setAttribute('aria-label', 'Close image');
+      btn.textContent = '×';
+      btn.addEventListener('click', close);
+
+      content.appendChild(img);
+      content.appendChild(btn);
+
+      if (caption) {
+        const cap = document.createElement('div');
+        cap.className = 'img-caption';
+        cap.style.color = '#fff';
+        cap.style.marginTop = '8px';
+        cap.textContent = caption;
+        const wrapper = document.createElement('div');
+        wrapper.appendChild(content);
+        wrapper.appendChild(cap);
+        backdrop.appendChild(wrapper);
+      } else {
+        backdrop.appendChild(content);
+      }
+
+      document.body.appendChild(backdrop);
+
+      function close(e) {
+        if (e && e.target && e.target.tagName === 'IMG') return; // Don't close when clicking image itself
+        backdrop.remove();
+      }
+
+      document.addEventListener('keydown', function onKey(e) {
+        if (e.key === 'Escape') {
+          backdrop.remove();
+          document.removeEventListener('keydown', onKey);
+        }
+      });
+    }
+
+    document.querySelectorAll('img.img-clickable').forEach(img => {
+      img.addEventListener('click', () => {
+        const src = img.getAttribute('src');
+        const alt = img.getAttribute('alt');
+        const caption = img.getAttribute('data-caption');
+        openImageModal(src, alt, caption);
+      });
+    });
+  </script>
+</body>
+</html>
